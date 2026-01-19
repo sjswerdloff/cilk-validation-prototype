@@ -3,24 +3,30 @@ name: Cilk Plus to OpenMP SIMD Validation
 on: [push, pull_request]
 
 jobs:
-  x86_64-smoke-test:
-    name: x86_64 Smoke Test
+  cilk-plus:
+    name: Cilk Plus (GCC 7 in container)
     runs-on: ubuntu-latest
     container: ubuntu:20.04
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install compilers
+      - name: Install gcc-7
         run: |
           apt-get update
-          apt-get install -y gcc-7 gcc-11
+          apt-get install -y gcc-7
 
-      - name: Build and run both versions
+      - name: Build and run Cilk Plus
         run: |
-          echo "=== Cilk Plus (GCC 7) ==="
           gcc-7 -fcilkplus -O2 -o cilk_test src/cilk_test.c -lm
           ./cilk_test
-          echo ""
-          echo "=== OpenMP SIMD (GCC 11) ==="
-          gcc-11 -fopenmp-simd -O2 -o openmp_test src/openmp_simd_test.c -lm
+
+  openmp-simd:
+    name: OpenMP SIMD (current GCC)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and run OpenMP SIMD
+        run: |
+          gcc -fopenmp-simd -O2 -o openmp_test src/openmp_simd_test.c -lm
           ./openmp_test

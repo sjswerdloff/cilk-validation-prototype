@@ -6,20 +6,14 @@ jobs:
   x86_64-smoke-test:
     name: x86_64 Smoke Test
     runs-on: ubuntu-latest
+    container: ubuntu:20.04
     steps:
       - uses: actions/checkout@v4
 
-      - name: Cache apt packages
-        uses: actions/cache@v4
-        with:
-          path: |
-            /var/cache/apt/archives
-          key: apt-${{ runner.os }}-gcc-7-11
-
       - name: Install compilers
         run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-7 gcc-11
+          apt-get update
+          apt-get install -y gcc-7 gcc-11
 
       - name: Build and run both versions
         run: |

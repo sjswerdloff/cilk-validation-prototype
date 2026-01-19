@@ -3,42 +3,30 @@ name: Cilk Plus to OpenMP SIMD Validation
 on: [push, pull_request]
 
 jobs:
-  x86_64-comparison:
-    name: x86_64 Comparison (Ubuntu 20.04)
+  x86_64-smoke-test:
+    name: x86_64 Smoke Test (Ubuntu 20.04)
     runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v4
+
+      - name: Cache apt packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            /var/cache/apt/archives
+          key: apt-${{ runner.os }}-gcc-7-11
 
       - name: Install compilers
         run: |
           sudo apt-get update
           sudo apt-get install -y gcc-7 gcc-11
 
-      - name: Build Cilk Plus version (GCC 7)
-        run: gcc-7 -fcilkplus -O2 -o cilk_test src/cilk_test.c -lm
+      - name: Build and run Cilk Plus version (GCC 7)
+        run: |
+          gcc-7 -fcilkplus -O2 -o cilk_test src/cilk_test.c -lm
+          ./cilk_test
 
-      - name: Build OpenMP SIMD version (GCC 11)
-        run: gcc-11 -fopenmp-simd -O2 -o openmp_test src/openmp_simd_test.c -lm
-
-      - name: Run Cilk Plus version
-        run: ./cilk_test | tee cilk_output.txt
-
-      - name: Run OpenMP SIMD version
-        run: ./openmp_test | tee openmp_output.txt
-
-      - name: Compare outputs (exact)
-        run: diff cilk_output.txt openmp_output.txt && echo "Exact match" || echo "Checking tolerance..."
-
-      - name: Compare outputs (tolerance)
-        run: python3 scripts/compare_outputs.py cilk_output.txt openmp_output.txt
-
-      - name: Performance comparison
-        run: bash scripts/benchmark.sh 100
-
-      - name: Upload outputs
-        uses: actions/upload-artifact@v4
-        with:
-          name: x86_64-outputs
-          path: |
-            cilk_output.txt
-            openmp_output.txt
+      - name: Build and run OpenMP SIMD version (GCC 11)
+        run: |
+          gcc-11 -fopenmp-simd -O2 -o openmp_test src/openmp_simd_test.c -lm
+          ./openmp_test

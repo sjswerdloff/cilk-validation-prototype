@@ -21,12 +21,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y gcc-7 gcc-11
 
-      - name: Build and run Cilk Plus version (GCC 7)
+      - name: Build and run both versions
         run: |
+          echo "=== Cilk Plus (GCC 7) ==="
           gcc-7 -fcilkplus -O2 -o cilk_test src/cilk_test.c -lm
           ./cilk_test
-
-      - name: Build and run OpenMP SIMD version (GCC 11)
-        run: |
+          echo ""
+          echo "=== OpenMP SIMD (GCC 11) ==="
           gcc-11 -fopenmp-simd -O2 -o openmp_test src/openmp_simd_test.c -lm
           ./openmp_test

@@ -1,0 +1,5 @@
+*_test
+*_bench
+*.o
+*.txt
+!src/*.txt

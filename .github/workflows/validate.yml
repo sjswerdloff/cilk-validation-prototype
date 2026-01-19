@@ -1,0 +1,161 @@
+name: Cilk Plus to OpenMP SIMD Validation
+
+on: [push, pull_request]
+
+jobs:
+  # Primary test: Compare Cilk Plus vs OpenMP SIMD on SAME x86_64 hardware
+  x86_64-comparison:
+    name: x86_64 Comparison (Ubuntu 20.04)
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install compilers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-7 gcc-11
+
+      - name: Build Cilk Plus version (GCC 7)
+        run: |
+          gcc-7 -fcilkplus -O2 -o cilk_test src/cilk_test.c -lm
+          echo "Cilk Plus build successful"
+
+      - name: Build OpenMP SIMD version (GCC 11)
+        run: |
+          gcc-11 -fopenmp-simd -O2 -o openmp_test src/openmp_simd_test.c -lm
+          echo "OpenMP SIMD build successful"
+
+      - name: Run Cilk Plus version
+        run: |
+          echo "=== Cilk Plus Output ==="
+          ./cilk_test | tee cilk_output.txt
+
+      - name: Run OpenMP SIMD version
+        run: |
+          echo "=== OpenMP SIMD Output ==="
+          ./openmp_test | tee openmp_output.txt
+
+      - name: Compare outputs (exact)
+        run: |
+          echo "=== Exact Diff ==="
+          if diff cilk_output.txt openmp_output.txt; then
+            echo "SUCCESS: Outputs match exactly"
+          else
+            echo "NOTICE: Outputs differ (checking tolerance next)"
+          fi
+
+      - name: Compare outputs (tolerance)
+        run: |
+          echo "=== Tolerance-based comparison (1e-12) ==="
+          python3 << 'EOF'
+          import sys
+
+          def parse_output(filename):
+              result = {}
+              with open(filename) as f:
+                  for line in f:
+                      if '=' in line:
+                          key, val = line.strip().split('=', 1)
+                          try:
+                              result[key] = float(val)
+                          except ValueError:
+                              result[key] = val
+              return result
+
+          cilk = parse_output('cilk_output.txt')
+          openmp = parse_output('openmp_output.txt')
+
+          tolerance = 1e-12
+          passed = True
+
+          for key in cilk:
+              if key not in openmp:
+                  print(f"MISSING: {key} not in OpenMP output")
+                  passed = False
+                  continue
+
+              cv, ov = cilk[key], openmp[key]
+              if isinstance(cv, float) and isinstance(ov, float):
+                  diff = abs(cv - ov)
+                  rel_diff = diff / max(abs(cv), 1e-15)
+                  if diff > tolerance:
+                      print(f"MISMATCH: {key} cilk={cv} openmp={ov} diff={diff:.2e} rel={rel_diff:.2e}")
+                      passed = False
+                  else:
+                      print(f"OK: {key} diff={diff:.2e}")
+              elif cv != ov:
+                  print(f"MISMATCH: {key} cilk={cv} openmp={ov}")
+                  passed = False
+              else:
+                  print(f"OK: {key} = {cv}")
+
+          if passed:
+              print("\nSUCCESS: All values match within tolerance")
+              sys.exit(0)
+          else:
+              print("\nFAILURE: Some values differ beyond tolerance")
+              sys.exit(1)
+          EOF
+
+      - name: Performance comparison
+        run: |
+          echo "=== Performance Comparison (10000 iterations) ==="
+
+          # Simple timing wrapper
+          cat > bench.c << 'BENCH'
+          #include <stdio.h>
+          #include <time.h>
+          #include <stdlib.h>
+
+          extern int main_impl(void);
+
+          int main(int argc, char **argv) {
+              int iterations = argc > 1 ? atoi(argv[1]) : 10000;
+              clock_t start = clock();
+              for (int i = 0; i < iterations; i++) {
+                  main_impl();
+              }
+              clock_t end = clock();
+              double elapsed = (double)(end - start) / CLOCKS_PER_SEC;
+              fprintf(stderr, "Iterations: %d, Time: %.3f sec, Per-iter: %.6f ms\n",
+                      iterations, elapsed, elapsed * 1000.0 / iterations);
+              return 0;
+          }
+          BENCH
+
+          # Modify source for benchmarking (rename main to main_impl)
+          sed 's/int main(/int main_impl(/' src/cilk_test.c > cilk_bench.c
+          sed 's/int main(/int main_impl(/' src/openmp_simd_test.c > openmp_bench.c
+
+          gcc-7 -fcilkplus -O2 -o cilk_bench cilk_bench.c bench.c -lm
+          gcc-11 -fopenmp-simd -O2 -o openmp_bench openmp_bench.c bench.c -lm
+
+          echo "Cilk Plus (GCC 7):"
+          ./cilk_bench 10000 > /dev/null
+
+          echo "OpenMP SIMD (GCC 11):"
+          ./openmp_bench 10000 > /dev/null
+
+      - name: Upload outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: x86_64-outputs
+          path: |
+            cilk_output.txt
+            openmp_output.txt
+
+  # Future: Apple Silicon validation (after x86_64 is proven)
+  # apple-silicon:
+  #   name: Apple Silicon (macOS ARM64)
+  #   runs-on: macos-14
+  #   needs: x86_64-comparison
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - name: Build OpenMP SIMD version
+  #       run: |
+  #         brew install libomp
+  #         clang -Xpreprocessor -fopenmp -I/opt/homebrew/opt/libomp/include \
+  #               -L/opt/homebrew/opt/libomp/lib -lomp -O2 \
+  #               -o openmp_test src/openmp_simd_test.c -lm
+  #     - name: Run and compare to x86_64 reference
+  #       run: ./openmp_test

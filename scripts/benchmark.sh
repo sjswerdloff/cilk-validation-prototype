@@ -1,7 +1,7 @@
 #!/bin/bash
 # Benchmark Cilk Plus vs OpenMP SIMD performance
 
-ITERATIONS=${1:-10000}
+ITERATIONS=${1:-100}
 
 echo "=== Performance Comparison ($ITERATIONS iterations) ==="
 

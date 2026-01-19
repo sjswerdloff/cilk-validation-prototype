@@ -33,7 +33,7 @@ jobs:
         run: python3 scripts/compare_outputs.py cilk_output.txt openmp_output.txt
 
       - name: Performance comparison
-        run: bash scripts/benchmark.sh 1000
+        run: bash scripts/benchmark.sh 100
 
       - name: Upload outputs
         uses: actions/upload-artifact@v4
